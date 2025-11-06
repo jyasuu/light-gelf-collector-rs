@@ -32,7 +32,7 @@ RUN apt-get update && \
 WORKDIR /app
 
 # Copy the compiled binary from the build stage
-COPY --from=builder /usr/src/app/target/release/mcp-server-demo .
+COPY --from=builder /usr/src/app/target/release/light-gelf-collector-rs .
 
 EXPOSE 8000
 
