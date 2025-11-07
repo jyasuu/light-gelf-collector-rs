@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Light GELF Collector - receives GELF messages and provides HTTP API
+  gelf-collector:
+    build: .
+    container_name: light-gelf-collector
+    ports:
+      - "8080:8080"  # HTTP API
+      - "12201:12201/udp"  # GELF UDP listener
+    command: ["./light-gelf-collector-rs", "--bind-address", "0.0.0.0", "--udp-port", "12201", "--http-port", "8080"]
+    environment:
+      RUST_LOG: debug
+    networks:
+      - gelf-network
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
+  # Telegraf - reads log files and sends to GELF collector
+  telegraf:
+    image: telegraf:1.29
+    container_name: telegraf
+    volumes:
+      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./test-logs/:/var/log/app/  # Mount test log directory
+    # depends_on:
+    #   gelf-collector:
+        # condition: service_healthy
+    networks:
+      - gelf-network
+    restart: unless-stopped
+
+  # # Test log generator - creates sample log files for testing
+  # log-generator:
+  #   image: alpine:latest
+  #   container_name: log-generator
+  #   volumes:
+  #     - ./test-logs/:/var/log/app/
+  #   command: |
+  #     sh -c '
+  #       while true; do
+  #         echo "$$(date '+%Y-%m-%d %H:%M:%S') [INFO] User login successful - user_id: $$((RANDOM % 1000)) ip: 192.168.1.$$((RANDOM % 255))" >> ./test-logs/application.log
+  #         echo "$$(date '+%Y-%m-%d %H:%M:%S') [ERROR] Database connection failed - retry_count: $$((RANDOM % 5)) error_code: E$$((RANDOM % 1000))" >> ./test-logs/application.log
+  #         echo "$$(date '+%Y-%m-%d %H:%M:%S') [WARN] High memory usage detected - usage: $$((RANDOM % 100))% threshold: 80%" >> ./test-logs/application.log
+  #         sleep 5
+  #       done
+  #     '
+  #   restart: unless-stopped
+
+networks:
+  gelf-network:
+    driver: bridge
+
+volumes:
+  test-logs:
