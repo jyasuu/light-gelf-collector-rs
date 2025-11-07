@@ -34,7 +34,7 @@ WORKDIR /app
 # Copy the compiled binary from the build stage
 COPY --from=builder /usr/src/app/target/release/light-gelf-collector-rs .
 
-EXPOSE 8000
+EXPOSE 8080 12201/udp
 
 # Set the startup command
-CMD ["./mcp-server-demo"]
+CMD ["./light-gelf-collector-rs"]

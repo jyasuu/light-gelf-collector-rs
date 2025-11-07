@@ -4,11 +4,31 @@ A lightweight GELF (Graylog Extended Log Format) log collector written in Rust.
 
 ## Features
 
-✅ **UDP Listener** - Receives GELF log messages on configurable UDP port (default: 12201)
-✅ **In-Memory Storage** - Stores log messages in memory with configurable size limits and automatic cleanup
-✅ **HTTP Service** - Provides REST API to fetch stored log messages
-✅ **GZIP Support** - Automatically decompresses GZIP-compressed GELF messages
-✅ **Configurable** - Command-line options for ports, storage limits, and bind addresses
+### Core Functionality
+✅ **UDP GELF Listener** - High-performance async UDP server that receives GELF log messages on configurable port (default: 12201)  
+✅ **In-Memory Storage** - Thread-safe circular buffer storage with configurable size limits and automatic cleanup  
+✅ **REST API** - Full-featured HTTP service providing multiple endpoints for log retrieval and monitoring  
+✅ **Real-time Processing** - Concurrent message handling with detailed logging and error handling  
+
+### Compression Support
+✅ **Multi-Format Compression** - Automatic detection and decompression of compressed GELF messages:
+  - **GZIP** compression (RFC 1952) - `0x1f 0x8b` magic bytes
+  - **ZLIB** compression (RFC 1950) - `0x78 0x9c/0xda/0x01` magic bytes  
+  - **Uncompressed** messages - Raw JSON format
+✅ **Safe UTF-8 Handling** - Robust string processing with proper character boundary handling
+
+### Configuration & Deployment
+✅ **Flexible Configuration** - Command-line options for all major settings:
+  - UDP/HTTP ports, bind addresses, memory limits
+  - Environment-based log level configuration
+✅ **Docker Support** - Ready-to-use containerized deployment with docker-compose
+✅ **Production Ready** - Structured logging, health checks, and comprehensive error handling
+
+### Monitoring & Observability
+✅ **Built-in Statistics** - Memory usage, message counts, and capacity monitoring
+✅ **Health Checks** - Dedicated endpoint for service health monitoring
+✅ **Structured Logging** - Detailed debug logging with configurable levels using `tracing`
+✅ **CORS Support** - Cross-origin resource sharing for web-based dashboards
 
 ## Installation & Usage
 
@@ -91,7 +111,16 @@ curl "http://localhost:8080/health"
 
 ## GELF Message Format
 
-The server accepts standard GELF messages in JSON format. Example:
+The server accepts standard GELF messages in JSON format, both compressed and uncompressed:
+
+### Supported Formats
+- **Uncompressed JSON** - Raw GELF messages in UTF-8 encoded JSON
+- **GZIP Compressed** - JSON compressed with GZIP (RFC 1952)
+- **ZLIB Compressed** - JSON compressed with ZLIB/Deflate (RFC 1950)
+
+The compression format is automatically detected based on magic bytes and decompressed transparently.
+
+### Example GELF Message
 
 ```json
 {
@@ -140,11 +169,13 @@ The collector automatically manages memory by:
 
 ## Architecture
 
-- **Async UDP Server**: Uses Tokio for high-performance async UDP message handling
-- **Thread-Safe Storage**: Uses Arc<RwLock<VecDeque>> for concurrent access to the message store
-- **HTTP API**: Built with Warp web framework for the REST API
-- **GZIP Support**: Automatic decompression of compressed GELF messages
-- **Structured Logging**: Uses tracing for application logging
+- **Async UDP Server**: Uses Tokio for high-performance async UDP message handling with 8KB buffer
+- **Thread-Safe Storage**: Uses `Arc<RwLock<VecDeque>>` for concurrent access to the circular message buffer
+- **HTTP API**: Built with Warp web framework providing RESTful endpoints with CORS support
+- **Multi-Format Compression**: Automatic detection and decompression using `flate2` (GZIP & ZLIB)
+- **Safe String Processing**: UTF-8 character boundary-aware truncation and preview generation
+- **Structured Logging**: Uses `tracing` with configurable log levels and detailed debug information
+- **Memory Management**: Automatic cleanup with configurable limits and real-time statistics tracking
 
 ## Dependencies
 
