@@ -137,12 +137,19 @@ async fn handle_udp_message(socket: Arc<UdpSocket>, store: LogStore) {
                     &raw_data[..std::cmp::min(10, raw_data.len())]
                 );
 
-                // Try to decompress if it's gzipped
+                // Try to decompress if it's compressed
                 let is_gzipped = raw_data.len() > 2 && raw_data[0] == 0x1f && raw_data[1] == 0x8b;
-                debug!(
-                    "Message compression detected: {}",
-                    if is_gzipped { "GZIP" } else { "none" }
-                );
+                let is_zlib = raw_data.len() > 2 && raw_data[0] == 0x78 && (raw_data[1] == 0x9c || raw_data[1] == 0xda || raw_data[1] == 0x01);
+                
+                let compression_type = if is_gzipped {
+                    "GZIP"
+                } else if is_zlib {
+                    "ZLIB"
+                } else {
+                    "none"
+                };
+                
+                debug!("Message compression detected: {}", compression_type);
 
                 let message_str = if is_gzipped {
                     debug!("Attempting to decompress GZIP data...");
@@ -161,16 +168,43 @@ async fn handle_udp_message(socket: Arc<UdpSocket>, store: LogStore) {
                             continue;
                         }
                     }
+                } else if is_zlib {
+                    debug!("Attempting to decompress ZLIB data...");
+                    match decompress_zlib(raw_data) {
+                        Ok(decompressed) => {
+                            debug!(
+                                "Successfully decompressed {} bytes to {} bytes",
+                                raw_data.len(),
+                                decompressed.len()
+                            );
+                            String::from_utf8_lossy(&decompressed).to_string()
+                        }
+                        Err(e) => {
+                            warn!("Failed to decompress ZLIB message from {}: {}", addr, e);
+                            debug!("ZLIB decompression error details: {:?}", e);
+                            continue;
+                        }
+                    }
                 } else {
                     debug!("Processing uncompressed message data");
                     String::from_utf8_lossy(raw_data).to_string()
                 };
 
                 debug!("Message string length: {} characters", message_str.len());
-                debug!(
-                    "Message preview (first 200 chars): {}",
-                    &message_str[..std::cmp::min(200, message_str.len())]
-                );
+                
+                // Safe string truncation that respects UTF-8 character boundaries
+                let preview = if message_str.len() <= 200 {
+                    message_str.as_str()
+                } else {
+                    // Find a safe character boundary at or before 200 bytes
+                    let mut end = 200;
+                    while end > 0 && !message_str.is_char_boundary(end) {
+                        end -= 1;
+                    }
+                    &message_str[..end]
+                };
+                
+                debug!("Message preview (first ~200 chars): {}", preview);
 
                 // Parse GELF message
                 debug!("Attempting to parse GELF message...");
@@ -228,6 +262,26 @@ fn decompress_gzip(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
     }
 }
 
+fn decompress_zlib(data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+    use flate2::read::ZlibDecoder;
+    use std::io::Read;
+
+    debug!("Starting ZLIB decompression for {} bytes", data.len());
+    let mut decoder = ZlibDecoder::new(data);
+    let mut decompressed = Vec::new();
+
+    match decoder.read_to_end(&mut decompressed) {
+        Ok(bytes_read) => {
+            debug!("ZLIB decompression successful: {} bytes read", bytes_read);
+            Ok(decompressed)
+        }
+        Err(e) => {
+            debug!("ZLIB decompression failed: {:?}", e);
+            Err(e)
+        }
+    }
+}
+
 fn parse_gelf_message(message_str: &str) -> Result<GelfMessage, serde_json::Error> {
     debug!(
         "Parsing GELF JSON message of {} characters",
@@ -251,10 +305,20 @@ fn parse_gelf_message(message_str: &str) -> Result<GelfMessage, serde_json::Erro
         }
         Err(e) => {
             debug!("GELF JSON parsing failed: {:?}", e);
-            debug!(
-                "Failed to parse as GELF, message preview: {}",
-                &message_str[..std::cmp::min(100, message_str.len())]
-            );
+            
+            // Safe string truncation that respects UTF-8 character boundaries
+            let preview = if message_str.len() <= 100 {
+                message_str
+            } else {
+                // Find a safe character boundary at or before 100 bytes
+                let mut end = 100;
+                while end > 0 && !message_str.is_char_boundary(end) {
+                    end -= 1;
+                }
+                &message_str[..end]
+            };
+            
+            debug!("Failed to parse as GELF, message preview: {}", preview);
             Err(e)
         }
     }
