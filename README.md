@@ -54,6 +54,33 @@ cargo run -- --udp-port 12201 --http-port 8080 --max-messages 5000
 -b, --bind-address <BIND_ADDRESS>   Bind address [default: 0.0.0.0]
 ```
 
+## Web Interface
+
+### GET / - Real-time Log Viewer
+Access the interactive web interface for real-time log monitoring.
+
+**Features:**
+- **Real-time Streaming**: Live updates using Server-Sent Events (SSE)
+- **Beautiful UI**: Dark theme with color-coded log levels and responsive design
+- **Interactive Controls**: Pause/resume streaming, clear display, load history
+- **Connection Status**: Visual indicators for connection state
+- **Auto-reconnection**: Automatic reconnection on connection loss
+- **Performance Optimized**: Handles high-volume log streams efficiently
+
+**Example:**
+```bash
+# Open in your browser
+http://localhost:8080/
+```
+
+The web interface provides:
+- **Live log streaming** with automatic updates as new messages arrive
+- **Log level color coding** (Emergency/Alert/Critical = Red, Warning = Orange, etc.)
+- **Host and timestamp information** clearly displayed
+- **Additional GELF fields** shown as tags
+- **Statistics display** showing message count and capacity usage
+- **Mobile responsive design** that works on all devices
+
 ## API Endpoints
 
 ### GET /logs
@@ -107,6 +134,30 @@ Health check endpoint.
 **Example:**
 ```bash
 curl "http://localhost:8080/health"
+```
+
+### GET /stream
+Server-Sent Events (SSE) endpoint for real-time log streaming.
+
+**Features:**
+- Real-time message broadcasting to connected clients
+- Automatic reconnection support
+- JSON-formatted log events
+- High-performance streaming with minimal latency
+
+**Example:**
+```bash
+# Stream logs in real-time (or use EventSource in JavaScript)
+curl -N "http://localhost:8080/stream"
+```
+
+**JavaScript Usage:**
+```javascript
+const eventSource = new EventSource('/stream');
+eventSource.onmessage = function(event) {
+    const logEntry = JSON.parse(event.data);
+    console.log('New log:', logEntry);
+};
 ```
 
 ## GELF Message Format
@@ -179,9 +230,11 @@ The collector automatically manages memory by:
 
 ## Dependencies
 
-- `tokio` - Async runtime
-- `warp` - Web framework for HTTP API
+- `tokio` - Async runtime and networking
+- `warp` - Web framework for HTTP API and SSE
 - `serde/serde_json` - JSON serialization/deserialization
 - `clap` - Command-line argument parsing
 - `tracing` - Structured logging
-- `flate2` - GZIP compression support
+- `flate2` - GZIP/ZLIB compression support
+- `tokio-stream` - Stream utilities for real-time broadcasting
+- `futures-util` - Stream processing utilities
